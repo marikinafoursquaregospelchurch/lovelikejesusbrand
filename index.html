@@ -364,11 +364,18 @@ footer .wrap{padding-block:24px;display:flex;justify-content:space-between;gap:1
 
       <div class="card">
         <div class="eyebrow" style="margin-bottom:10px">Attach your transfer receipt</div>
-        <p class="note" style="margin:0 0 12px">Add the screenshot of your GCash, Maya or bank transfer. It is sent to the shop with your order number. We also combine it with your order into one receipt image you can save.</p>
+        <p class="note" style="margin:0 0 12px">After you pay, add the reference number and screenshot of your GCash, Maya or bank transfer, then send them to the shop.</p>
+        <div class="f">
+          <label for="refNo">Payment reference number</label>
+          <input id="refNo" inputmode="text" autocomplete="off" placeholder="From your GCash, Maya or bank receipt">
+          <div class="err" id="e-refNo"></div>
+        </div>
         <div class="f">
           <label for="rcptFile">Payment screenshot</label>
           <input id="rcptFile" type="file" accept="image/*">
+          <div class="err" id="e-rcptFile"></div>
         </div>
+        <button class="btn" type="button" id="sendRcpt" style="margin-top:6px">Send payment to the shop</button>
         <p class="savemsg" id="paidMsg" role="status" hidden></p>
         <img id="rcptPrev" alt="Your payment screenshot" hidden style="max-width:220px;border-radius:8px;margin-top:12px;border:1px solid var(--line)">
         <div id="rcptOut" hidden style="margin-top:16px">
@@ -756,10 +763,12 @@ Payment: ${pay}${$('notes').value.trim() ? `\nNotes: ${$('notes').value.trim()}`
   lastOrder = { code, msg, pay, total: t.total,
     data: { code, name, mobile, app, email, social,
       items: cart.map(l => `${l.qty} × ${prodName(l.product)} · ${l.color} · ${detailOf(l)}`).join('\n'),
+      lines: cart.map(l => ({ product: prodName(l.product), color: l.color, design: l.design || '', size: l.size || '',
+        qty: l.qty, unit: priceOf(l.product), line: l.qty * priceOf(l.product) })),
       itemCount: t.caps, subtotal: t.subtotal, delivery: dName, shippingFee: t.fee,
       address: t.d === 'self' ? '' : address, total: t.total, payment: pay, notes, message: msg } };
   sendToSheet('lead', lastOrder.data, 'leadMsg');
-  $('rcptFile').value = ''; $('rcptOut').hidden = true; $('rcptPrev').hidden = true; $('paidMsg').hidden = true;
+  $('rcptFile').value = ''; $('refNo').value = ''; lastShot = null; $('rcptOut').hidden = true; $('rcptPrev').hidden = true; $('paidMsg').hidden = true; $('sendRcpt').disabled = false; setErr('refNo',''); setErr('rcptFile','');
   renderDone();
   show('viewDone');
   cart = []; store.set(cart); renderCount();
@@ -799,19 +808,33 @@ $('rcptFile').addEventListener('change', () => {
     $('rcptPrev').src = url; $('rcptPrev').hidden = false;
     $('rcptImg').src = buildReceipt(lastOrder, shot);
     $('rcptOut').hidden = false;
-    sendToSheet('paid', Object.assign({}, lastOrder.data, { receipt: shrink(shot), receiptName: f.name }), 'paidMsg');
+    lastShot = shot; setErr('rcptFile', '');
   };
   shot.src = url;
 });
+let lastShot = null;
+$('sendRcpt').onclick = () => {
+  if (!lastOrder) return;
+  const ref = $('refNo').value.trim();
+  const refOk = /^[A-Za-z0-9 -]{4,40}$/.test(ref);
+  setErr('refNo', refOk ? '' : 'Enter the reference number from your payment receipt.');
+  setErr('rcptFile', lastShot ? '' : 'Add the screenshot of your payment.');
+  if (!refOk) { $('refNo').focus(); return; }
+  if (!lastShot) { $('rcptFile').focus(); return; }
+  if (!SHOP.sheetUrl) { const el = $('paidMsg'); el.hidden = false; el.className = 'savemsg bad'; el.textContent = 'Please send your reference number and receipt image to us by message.'; return; }
+  $('sendRcpt').disabled = true;
+  sendToSheet('paid', Object.assign({}, lastOrder.data, { reference: ref, receipt: shrink(lastShot, 1400), thumb: shrink(lastShot, 600) }), 'paidMsg',
+    ok => { $('sendRcpt').disabled = ok; });
+};
 /* save to the shop's Google Sheet */
-function shrink(img){
-  const k = Math.min(1, 1400 / Math.max(img.width, img.height));
+function shrink(img, max){
+  const k = Math.min(1, max / Math.max(img.width, img.height));
   const cv = document.createElement('canvas');
   cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
   cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
   return cv.toDataURL('image/jpeg', 0.85);
 }
-function sendToSheet(type, data, msgId){
+function sendToSheet(type, data, msgId, after){
   const el = $(msgId);
   if (!SHOP.sheetUrl) { el.hidden = true; return; }
   el.hidden = false; el.className = 'savemsg';
@@ -824,12 +847,14 @@ function sendToSheet(type, data, msgId){
       el.textContent = type === 'paid'
         ? 'Receipt sent. We check your payment, then confirm your order by message.'
         : 'Your order is saved with the shop.';
+      if (after) after(true);
     })
     .catch(() => {
       el.className = 'savemsg bad';
       el.textContent = type === 'paid'
         ? 'We could not send your receipt online. Please send the receipt image to us by message.'
         : 'We could not save your order online. Please copy your order and send it to us by message.';
+      if (after) after(false);
     });
 }
 
