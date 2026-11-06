@@ -214,7 +214,7 @@ footer .wrap{padding-block:24px;display:flex;justify-content:space-between;gap:1
         <div class="facts">
           <span class="chip">Caps ₱499</span>
           <span class="chip">Tees ₱599</span>
-          <span class="chip">Book your own courier on dispatch day, or add ₱300 Metro Manila · ₱400 provincial for us to book it</span>
+          <span class="chip">Claim at MFGC or book your own courier for free, or add ₱300 Metro Manila · ₱400 provincial for us to book it</span>
         </div>
       </div>
       <figure class="collage" role="img" aria-label="Love Like Jesus sample caps and tees"><div class="stage" id="collage"></div></figure>
@@ -297,6 +297,7 @@ footer .wrap{padding-block:24px;display:flex;justify-content:space-between;gap:1
               <legend>Delivery</legend>
               <div class="choices" id="deliveryChoices">
                 <label class="choice"><input type="radio" name="delivery" value="self" checked><span><b>I will book my own courier</b><small>No added fee. We message you your dispatch day. On that day, you book the courier you prefer, such as Lalamove, Grab or J&amp;T, and pay them directly.</small></span></label>
+                <label class="choice"><input type="radio" name="delivery" value="mfgc"><span><b>I will claim the item at MFGC</b><small>No added fee. We message you your claiming day.</small></span></label>
                 <label class="choice"><input type="radio" name="delivery" value="mm"><span><b>Book it for me, Metro Manila</b><small>Add ₱300. We book the courier and ship on dispatch day.</small></span></label>
                 <label class="choice"><input type="radio" name="delivery" value="prov"><span><b>Book it for me, provincial</b><small>Add ₱400. We book the courier and ship on dispatch day.</small></span></label>
               </div>
@@ -681,13 +682,13 @@ function renderCheckout(){
   renderSummary();
 }
 
-document.querySelectorAll('input[name="delivery"]').forEach(i => i.onchange = () => { $('addrWrap').hidden = i.value === 'self'; renderSummary(); });
+document.querySelectorAll('input[name="delivery"]').forEach(i => i.onchange = () => { $('addrWrap').hidden = i.value === 'self' || i.value === 'mfgc'; renderSummary(); });
 function renderSummary(){
   const t = totals();
   $('sumList').innerHTML = `
     <dt>Items</dt><dd>${t.caps}</dd>
     <dt>Subtotal</dt><dd>${peso(t.subtotal)}</dd>
-    <dt>Shipping</dt><dd>${t.fee ? peso(t.fee) : 'You book the courier'}</dd>
+    <dt>Shipping</dt><dd>${t.fee ? peso(t.fee) : t.d === 'mfgc' ? 'Claim at MFGC' : 'You book the courier'}</dd>
     <dt class="total">Total</dt><dd class="total">${peso(t.total)}</dd>`;
   $('placeBtn').disabled = t.caps === 0;
 }
@@ -722,7 +723,7 @@ $('form').addEventListener('submit', e => {
   const eOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   setErr('email', eOk ? '' : 'Enter a valid email, like name@gmail.com.'); ok = ok && eOk;
   setErr('social', social ? '' : 'Enter your Facebook or Instagram name so we can message you.'); ok = ok && !!social;
-  const aOk = t.d === 'self' || address.length > 8;
+  const aOk = t.d === 'self' || t.d === 'mfgc' || address.length > 8;
   setErr('address', aOk ? '' : 'Enter your full delivery address.'); ok = ok && aOk;
   setErr('ack', $('ack').checked ? '' : 'Tick the box to confirm this is a pre-order.'); ok = ok && $('ack').checked;
   const missing = [...document.querySelectorAll('.err')].filter(e => e.textContent).map(e => e.id.replace('e-',''));
@@ -749,7 +750,7 @@ ${lines}
 
 Items: ${t.caps}
 Subtotal: ${peso(t.subtotal)}
-Shipping: ${t.d === 'self' ? 'I book my own courier on dispatch day' : `${peso(t.fee)}, shop books the courier (${t.d === 'mm' ? 'Metro Manila' : 'provincial'})\nAddress: ${address}`}
+Shipping: ${t.d === 'self' ? 'I book my own courier on dispatch day' : t.d === 'mfgc' ? 'I will claim the item at MFGC' : `${peso(t.fee)}, shop books the courier (${t.d === 'mm' ? 'Metro Manila' : 'provincial'})\nAddress: ${address}`}
 Total to pay: ${peso(t.total)}
 
 Name: ${name}
@@ -759,14 +760,14 @@ Facebook/Instagram: ${social}
 Payment: ${pay}${$('notes').value.trim() ? `\nNotes: ${$('notes').value.trim()}` : ''}`;
 
   const notes = $('notes').value.trim();
-  const dName = { self:'Customer books own courier', mm:'Shop books courier, Metro Manila', prov:'Shop books courier, provincial' }[t.d];
+  const dName = { self:'Customer books own courier', mfgc:'Claim at MFGC', mm:'Shop books courier, Metro Manila', prov:'Shop books courier, provincial' }[t.d];
   lastOrder = { code, msg, pay, total: t.total,
     data: { code, name, mobile, app, email, social,
       items: cart.map(l => `${l.qty} × ${prodName(l.product)} · ${l.color} · ${detailOf(l)}`).join('\n'),
       lines: cart.map(l => ({ product: prodName(l.product), color: l.color, design: l.design || '', size: l.size || '',
         qty: l.qty, unit: priceOf(l.product), line: l.qty * priceOf(l.product) })),
       itemCount: t.caps, subtotal: t.subtotal, delivery: dName, shippingFee: t.fee,
-      address: t.d === 'self' ? '' : address, total: t.total, payment: pay, notes, message: msg } };
+      address: (t.d === 'self' || t.d === 'mfgc') ? '' : address, total: t.total, payment: pay, notes, message: msg } };
   sendToSheet('lead', lastOrder.data, 'leadMsg');
   $('rcptFile').value = ''; $('refNo').value = ''; lastShot = null; $('rcptOut').hidden = true; $('rcptPrev').hidden = true; $('paidMsg').hidden = true; $('sendRcpt').disabled = false; setErr('refNo',''); setErr('rcptFile','');
   renderDone();
