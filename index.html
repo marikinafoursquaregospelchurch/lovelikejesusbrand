@@ -343,16 +343,35 @@ footer .wrap{padding-block:24px;display:flex;justify-content:space-between;gap:1
       <p class="savemsg" id="leadMsg" role="status" hidden></p>
 
       <div class="card">
-        <div class="eyebrow" style="margin-bottom:10px">Send your payment</div>
+        <div class="eyebrow" style="margin-bottom:10px">Step 1 · Send your payment</div>
         <div class="pay" id="payBox"></div>
       </div>
 
       <div class="card">
-        <div class="eyebrow" style="margin-bottom:10px">Then send us your order</div>
+        <div class="eyebrow" style="margin-bottom:10px">Step 2 · Attach your payment receipt</div>
+        <p class="note" style="margin:0 0 12px">Add the screenshot of your GCash, Maya or bank transfer. We read the reference number from it and send both to the shop.</p>
+        <div class="f">
+          <label for="rcptFile">Payment screenshot</label>
+          <input id="rcptFile" type="file" accept="image/*">
+          <div class="err" id="e-rcptFile"></div>
+        </div>
+        <p class="savemsg" id="ocrMsg" role="status" hidden></p>
+        <div class="f">
+          <label for="refNo">Payment reference number</label>
+          <input id="refNo" inputmode="text" autocomplete="off" placeholder="Filled in from your screenshot">
+          <div class="err" id="e-refNo"></div>
+        </div>
+        <button class="btn" type="button" id="sendRcpt" style="margin-top:6px">Send payment to the shop</button>
+        <p class="savemsg" id="paidMsg" role="status" hidden></p>
+        <img id="rcptPrev" alt="Your payment screenshot" hidden style="max-width:220px;border-radius:8px;margin-top:12px;border:1px solid var(--line)">
+      </div>
+
+      <div class="card">
+        <div class="eyebrow" style="margin-bottom:10px">Step 3 · Message us and keep your copy</div>
         <ol class="steps">
           <li><b>Copy your order</b> with the button below.</li>
           <li><b>Message us</b> on <span id="contactLine"></span>.</li>
-          <li><b>Paste your order</b> and send your order receipt image from step 3 below.</li>
+          <li><b>Paste your order</b> and send your order receipt image below.</li>
         </ol>
         <pre class="msg" id="msg" tabindex="0" style="margin-top:14px"></pre>
         <div class="row" style="margin-top:12px">
@@ -361,27 +380,9 @@ footer .wrap{padding-block:24px;display:flex;justify-content:space-between;gap:1
           <a class="btn ghost" data-msg="ig" target="_blank" rel="noopener">Message us on Instagram</a>
           <span class="added" id="copyMsg" role="status"></span>
         </div>
-      </div>
-
-      <div class="card">
-        <div class="eyebrow" style="margin-bottom:10px">Attach your transfer receipt</div>
-        <p class="note" style="margin:0 0 12px">After you pay, add the reference number and screenshot of your GCash, Maya or bank transfer, then send them to the shop.</p>
-        <div class="f">
-          <label for="refNo">Payment reference number</label>
-          <input id="refNo" inputmode="text" autocomplete="off" placeholder="From your GCash, Maya or bank receipt">
-          <div class="err" id="e-refNo"></div>
-        </div>
-        <div class="f">
-          <label for="rcptFile">Payment screenshot</label>
-          <input id="rcptFile" type="file" accept="image/*">
-          <div class="err" id="e-rcptFile"></div>
-        </div>
-        <button class="btn" type="button" id="sendRcpt" style="margin-top:6px">Send payment to the shop</button>
-        <p class="savemsg" id="paidMsg" role="status" hidden></p>
-        <img id="rcptPrev" alt="Your payment screenshot" hidden style="max-width:220px;border-radius:8px;margin-top:12px;border:1px solid var(--line)">
         <div id="rcptOut" hidden style="margin-top:16px">
-          <p class="note" style="margin:0 0 8px"><b style="color:var(--fg)">Your order receipt is ready.</b> On a phone, press and hold the image, then tap Save. On a computer, right-click it and choose Save image. Send it with your order message.</p>
-          <img id="rcptImg" alt="Order receipt with payment screenshot" style="width:100%;max-width:420px;border-radius:8px;border:1px solid var(--line)">
+          <p class="note" style="margin:0 0 8px"><b style="color:var(--fg)">Your order receipt is ready.</b> It has your order, reference number and payment screenshot. On a phone, press and hold the image, then tap Save. On a computer, right-click it and choose Save image. Keep it as your proof of order.</p>
+          <img id="rcptImg" alt="Order receipt with reference number and payment screenshot" style="width:100%;max-width:420px;border-radius:8px;border:1px solid var(--line)">
         </div>
       </div>
 
@@ -769,7 +770,7 @@ Payment: ${pay}${$('notes').value.trim() ? `\nNotes: ${$('notes').value.trim()}`
       itemCount: t.caps, subtotal: t.subtotal, delivery: dName, shippingFee: t.fee,
       address: (t.d === 'self' || t.d === 'mfgc') ? '' : address, total: t.total, payment: pay, notes, message: msg } };
   sendToSheet('lead', lastOrder.data, 'leadMsg');
-  $('rcptFile').value = ''; $('refNo').value = ''; lastShot = null; $('rcptOut').hidden = true; $('rcptPrev').hidden = true; $('paidMsg').hidden = true; $('sendRcpt').disabled = false; setErr('refNo',''); setErr('rcptFile','');
+  $('rcptFile').value = ''; $('refNo').value = ''; $('ocrMsg').hidden = true; receiptSent = false; ocrRun++; $('sendRcpt').textContent = 'Send payment to the shop'; lastShot = null; $('rcptOut').hidden = true; $('rcptPrev').hidden = true; $('paidMsg').hidden = true; $('sendRcpt').disabled = false; setErr('refNo',''); setErr('rcptFile','');
   renderDone();
   show('viewDone');
   cart = []; store.set(cart); renderCount();
@@ -778,7 +779,7 @@ Payment: ${pay}${$('notes').value.trim() ? `\nNotes: ${$('notes').value.trim()}`
 function renderDone(){
   const o = lastOrder;
   $('doneCode').textContent = o.code;
-  $('msg').textContent = o.msg;
+  $('msg').textContent = orderText();
   const acct = o.pay === 'GCash' ? SHOP.gcash : o.pay === 'Maya' ? SHOP.maya : SHOP.bank;
   const rows = [['Amount to pay', peso(o.total)], ['Pay with', o.pay]];
   if (o.pay === 'Bank transfer') rows.push(['Bank', acct.bank || 'We will message you the bank details']);
@@ -799,7 +800,70 @@ function renderDone(){
   document.querySelectorAll('[data-msg="ig"]').forEach(a => { a.href = `https://ig.me/m/${SHOP.instagram}`; });
 }
 
-/* combine order + payment screenshot into one image */
+/* order text, with the payment reference number once known */
+function orderText(){
+  if (!lastOrder) return '';
+  return lastOrder.msg + (lastOrder.ref ? `\nPayment reference no.: ${lastOrder.ref}` : '');
+}
+function refreshCopy(){
+  if (!lastOrder) return;
+  $('msg').textContent = orderText();
+  if (lastShot) { $('rcptImg').src = buildReceipt(Object.assign({}, lastOrder, { msg: orderText() }), lastShot); $('rcptOut').hidden = false; }
+}
+
+/* read the reference number from the screenshot */
+function extractRef(text){
+  const lines = String(text).split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const LABEL = /(?:ref(?:erence)?\.?\s*(?:no\.?|number|num|id|code|#)?|transaction\s*(?:id|no\.?|number|reference)|trace\s*(?:no\.?|number)|invoice\s*(?:no\.?|number))\s*[:#.\-]?\s*/i;
+  const clean = s => {
+    const out = [];
+    for (const tok of String(s).split(/\s+/).filter(Boolean)) {
+      const t = tok.replace(/[^A-Za-z0-9-]/g, '');
+      if (!t || !/\d/.test(t)) { if (out.length) break; else continue; }
+      out.push(t);
+    }
+    let c = out.join('').replace(/-/g, '').toUpperCase();
+    c = c.replace(/(\d)O(?=\d)/g, '$10').replace(/(\d)[IL](?=\d)/g, '$11');
+    if (c.length < 6 || c.length > 30 || (c.match(/\d/g) || []).length < 4) return '';
+    return c;
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(LABEL);
+    if (!m) continue;
+    const c = clean(lines[i].slice(m.index + m[0].length)) || clean(lines[i + 1] || '');
+    if (c) return c;
+  }
+  let best = '';
+  (String(text).match(/\d[\d ]{8,}\d/g) || []).forEach(r => {
+    const d = r.replace(/ /g, '');
+    if (d.length < 10 || /^(09|639)\d{9}$/.test(d)) return;
+    if (d.length > best.length) best = d;
+  });
+  return best;
+}
+let ocrLib = null, ocrRun = 0;
+function loadOcr(){
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+  if (ocrLib) return ocrLib;
+  ocrLib = new Promise((res, rej) => {
+    const sc = document.createElement('script');
+    sc.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+    sc.onload = () => window.Tesseract ? res(window.Tesseract) : rej(new Error('no ocr'));
+    sc.onerror = () => { ocrLib = null; rej(new Error('ocr blocked')); };
+    document.head.appendChild(sc);
+  });
+  return ocrLib;
+}
+async function readRef(img){
+  const T = await loadOcr();
+  const worker = await T.createWorker('eng', 1, { langPath: 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int' });
+  try { const { data } = await worker.recognize(shrink(img, 1800)); return extractRef(data.text); }
+  finally { worker.terminate(); }
+}
+function ocrNote(cls, text){ const el = $('ocrMsg'); el.hidden = false; el.className = 'savemsg' + (cls ? ' ' + cls : ''); el.textContent = text; }
+
+/* step 2: screenshot in, reference number read, payment sent */
+let lastShot = null, receiptSent = false;
 $('rcptFile').addEventListener('change', () => {
   const f = $('rcptFile').files[0];
   if (!f || !lastOrder) return;
@@ -807,26 +871,53 @@ $('rcptFile').addEventListener('change', () => {
   const shot = new Image();
   shot.onload = () => {
     $('rcptPrev').src = url; $('rcptPrev').hidden = false;
-    $('rcptImg').src = buildReceipt(lastOrder, shot);
-    $('rcptOut').hidden = false;
-    lastShot = shot; setErr('rcptFile', '');
+    lastShot = shot; receiptSent = false; setErr('rcptFile', ''); setErr('refNo', '');
+    $('paidMsg').hidden = true; $('sendRcpt').disabled = false; $('sendRcpt').textContent = 'Send payment to the shop';
+    refreshCopy();
+    const run = ++ocrRun;
+    ocrNote('', 'Reading the reference number from your screenshot…');
+    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 60000));
+    Promise.race([readRef(shot), timeout]).then(ref => {
+      if (run !== ocrRun) return;
+      if (ref) {
+        $('refNo').value = ref;
+        ocrNote('ok', `Reference number found: ${ref}. If it does not match your receipt, correct it and tap Update reference number.`);
+        sendPayment();
+      } else {
+        ocrNote('bad', 'We could not read a reference number. Type it from your receipt, then tap Send payment to the shop.');
+        $('refNo').focus();
+      }
+    }).catch(() => {
+      if (run !== ocrRun) return;
+      ocrNote('bad', 'We could not read the screenshot here. Type the reference number from your receipt, then tap Send payment to the shop.');
+      $('refNo').focus();
+    });
   };
   shot.src = url;
 });
-let lastShot = null;
-$('sendRcpt').onclick = () => {
+$('refNo').addEventListener('input', () => {
+  if (receiptSent) { $('sendRcpt').disabled = false; $('sendRcpt').textContent = 'Update reference number'; }
+});
+function sendPayment(){
   if (!lastOrder) return;
-  const ref = $('refNo').value.trim();
+  const ref = $('refNo').value.trim().replace(/\s+/g, ' ');
   const refOk = /^[A-Za-z0-9 -]{4,40}$/.test(ref);
-  setErr('refNo', refOk ? '' : 'Enter the reference number from your payment receipt.');
   setErr('rcptFile', lastShot ? '' : 'Add the screenshot of your payment.');
-  if (!refOk) { $('refNo').focus(); return; }
+  setErr('refNo', refOk ? '' : 'Enter the reference number from your payment receipt.');
   if (!lastShot) { $('rcptFile').focus(); return; }
+  if (!refOk) { $('refNo').focus(); return; }
+  lastOrder.ref = ref; refreshCopy();
   if (!SHOP.sheetUrl) { const el = $('paidMsg'); el.hidden = false; el.className = 'savemsg bad'; el.textContent = 'Please send your reference number and receipt image to us by message.'; return; }
+  const extra = { reference: ref };
+  if (!receiptSent) { extra.receipt = shrink(lastShot, 1400); extra.thumb = shrink(lastShot, 600); }
   $('sendRcpt').disabled = true;
-  sendToSheet('paid', Object.assign({}, lastOrder.data, { reference: ref, receipt: shrink(lastShot, 1400), thumb: shrink(lastShot, 600) }), 'paidMsg',
-    ok => { $('sendRcpt').disabled = ok; });
-};
+  sendToSheet('paid', Object.assign({}, lastOrder.data, extra), 'paidMsg', ok => {
+    if (ok) { receiptSent = true; $('sendRcpt').textContent = 'Update reference number'; }
+    else $('sendRcpt').disabled = false;
+  });
+}
+$('sendRcpt').onclick = sendPayment;
+
 /* save to the shop's Google Sheet */
 function shrink(img, max){
   const k = Math.min(1, max / Math.max(img.width, img.height));
@@ -892,7 +983,7 @@ function buildReceipt(o, shot){
 }
 
 $('copyBtn').onclick = () => {
-  const text = lastOrder ? lastOrder.msg : '';
+  const text = lastOrder ? orderText() : '';
   const done = m => $('copyMsg').textContent = m;
   const fallback = () => { const r = document.createRange(); r.selectNodeContents($('msg')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); done('Order selected. Copy it from your keyboard or menu.'); };
   try { navigator.clipboard.writeText(text).then(() => done('Copied. Paste it in your message to us.'), fallback); } catch(e){ fallback(); }
