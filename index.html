@@ -117,6 +117,8 @@ dialog#catDlg::backdrop{background:rgba(0,0,0,.7)}
 .swatches{display:flex;flex-wrap:wrap;gap:8px}
 .sw{width:34px;height:34px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;position:relative;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
 .sw[aria-pressed="true"]{border-color:var(--fg);box-shadow:0 0 0 2px var(--bg) inset}
+.sw.na{opacity:.4;cursor:not-allowed;overflow:hidden}
+.sw.na::after{content:"";position:absolute;left:50%;top:-10%;width:2px;height:120%;background:var(--fg);transform:translateX(-50%) rotate(45deg)}
 .designs{display:flex;flex-wrap:wrap;gap:8px}
 .opt.th{display:inline-flex;align-items:center;gap:8px;padding:6px 12px 6px 6px}
 .opt.th img{width:34px;height:34px;object-fit:contain;border-radius:6px;background:radial-gradient(circle,#4a4038,#2D2925)}
@@ -415,7 +417,7 @@ const SHOP = {
   viberWhatsApp: '',                 // e.g. '0917 123 4567'
   // Follow and message links
   facebookPage: 'https://www.facebook.com/LoveLikeJesusBrand/',   // same link as your Facebook QR code
-  facebookMessenger: 'https://m.me/LoveLikeJesusBrand',             // e.g. 'https://m.me/yourpageusername' — opens a Messenger chat
+  facebookMessenger: '',             // e.g. 'https://m.me/yourpageusername' — opens a Messenger chat
   instagram: 'lovelikejesusbrand',
   // Google Sheet web app link (ends in /exec). Orders save to the Leads tab; receipts to the Ordered and Paid tab.
   sheetUrl: 'https://script.google.com/macros/s/AKfycbxr5nIl6qwGHWk5rdW0EKdlBY654mkQSm7kxb4Zlcy5ktEBGoZHpR_opaxiN3JCDv0abw/exec'    // Instagram username
@@ -531,6 +533,7 @@ PRODUCTS.forEach(p => $('products').appendChild(productCard(p)));
 /* ---------- tees ---------- */
 const SIZES = ['XS','S','M','L','XL','2XL','3XL','4XL','5XL'];
 const BIG = ['Black','White'];   // only these colors come in 4XL and 5XL
+const UNAVAILABLE = ['Burgundy']; // tee colors shown but not orderable right now
 const sizesFor = color => BIG.includes(color) ? SIZES : SIZES.slice(0, SIZES.indexOf('3XL') + 1);
 function teeCard(t){
   const st = { size: 'M', qty: 1, color: t.colors.find(c => c[0] === t.start) || t.colors[0] };
@@ -546,6 +549,7 @@ function teeCard(t){
       <div>
         <div class="label">Color <em data-cname></em></div>
         <div class="swatches small" role="group" aria-label="${t.name} color" style="margin-top:8px"></div>
+        <div class="note" data-na style="margin-top:6px"></div>
         <button class="link" type="button" data-cat style="margin-top:6px;padding-left:0">See all ${t.colors.length} colors</button>
       </div>
       <div>
@@ -581,9 +585,14 @@ function teeCard(t){
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'sw'; b.style.background = c[1]; b.dataset.c = c[0];
     b.setAttribute('aria-label', c[0]); b.title = c[0];
-    b.onclick = () => { st.color = c; paint(); };
+    if (UNAVAILABLE.includes(c[0])) {
+      b.classList.add('na'); b.disabled = true;
+      b.setAttribute('aria-label', `${c[0]}, not available`); b.title = `${c[0]}, not available`;
+    } else b.onclick = () => { st.color = c; paint(); };
     sws.appendChild(b);
   });
+  const na = t.colors.filter(c => UNAVAILABLE.includes(c[0])).map(c => c[0]);
+  el.querySelector('[data-na]').textContent = na.length ? `${na.join(' and ')} is not available right now.` : '';
   el.querySelector('[data-cat]').onclick = () => openCatalog(t);
   SIZES.forEach(s => {
     const b = document.createElement('button');
