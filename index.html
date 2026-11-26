@@ -75,6 +75,17 @@ h2{font-stretch:62%;font-weight:900;font-size:40px;line-height:.95;margin:6px 0 
 .swatches.small .sw{width:28px;height:28px}
 dialog#catDlg{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:var(--radius);padding:0;width:min(1100px,calc(100vw - 24px));max-height:calc(100vh - 24px)}
 dialog#catDlg::backdrop{background:rgba(0,0,0,.7)}
+dialog#revDlg{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:var(--radius);padding:0;width:min(560px,calc(100vw - 24px));max-height:calc(100vh - 24px)}
+dialog#revDlg::backdrop{background:rgba(0,0,0,.7)}
+.rev{display:flex;flex-direction:column;gap:14px;padding:18px 20px 20px;overflow:auto;max-height:calc(100vh - 140px)}
+.rev section{border-top:1px solid var(--line);padding-top:12px}
+.rev .rh{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:6px}
+.rev .rh b{font-size:13px;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.rev ul{margin:0;padding-left:18px}
+.rev p{margin:0}
+.rev .tot{display:flex;justify-content:space-between;font-weight:700;font-size:18px;border-top:1px solid var(--line);padding-top:12px}
+.rev-foot{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;padding:14px 20px;border-top:1px solid var(--line)}
+.editbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px}
 .dlg-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel)}
 .dlg-body{padding:12px;overflow:auto;max-height:calc(100vh - 100px)}
 .dlg-body img{width:100%;display:block;border-radius:6px}
@@ -342,6 +353,10 @@ footer .wrap{padding-block:24px;display:flex;justify-content:space-between;gap:1
       <h2 id="doneH">Thank you for your pre-order.</h2>
       <p class="lead-msg">We message you on your social media account to confirm your order.</p>
       <div>Your order number <div class="code" id="doneCode"></div></div>
+      <div class="editbar" id="editBar">
+        <button class="btn ghost" type="button" id="editOrder">Edit order</button>
+        <span class="note" id="editNote" style="margin:0">Change items, contact or delivery details before you send your payment.</span>
+      </div>
       <p class="savemsg" id="leadMsg" role="status" hidden></p>
 
       <div class="card">
@@ -393,6 +408,15 @@ footer .wrap{padding-block:24px;display:flex;justify-content:space-between;gap:1
     </section>
   </div>
 </main>
+
+<dialog id="revDlg" aria-labelledby="revTitle">
+  <div class="dlg-head"><b id="revTitle">Review your order</b><button class="btn ghost" type="button" id="revClose">Edit details</button></div>
+  <div class="rev" id="revBody"></div>
+  <div class="rev-foot">
+    <button class="btn ghost" type="button" id="revBack">Go back and edit</button>
+    <button class="btn" type="button" id="revConfirm">Confirm and place order</button>
+  </div>
+</dialog>
 
 <dialog id="catDlg" aria-labelledby="catTitle">
   <div class="dlg-head"><b id="catTitle"></b><button class="btn ghost" type="button" id="catClose">Close</button></div>
@@ -711,7 +735,7 @@ function show(view){
 }
 $('cartBtn').onclick = () => show('viewCheckout');
 $('keepShopping').onclick = () => show('viewShop');
-$('newOrder').onclick = () => { cart = []; save(); show('viewShop'); };
+$('newOrder').onclick = () => { cart = []; save(); setEditing(null); show('viewShop'); };
 
 /* ---------- place order ---------- */
 function orderCode(){
@@ -748,13 +772,67 @@ $('form').addEventListener('submit', e => {
     return;
   }
   $('errBox').hidden = true;
+  openReview();
+});
 
+/* ---------- review before placing ---------- */
+const esc = v => String(v).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function openReview(){
+  const t = totals();
   const app = document.querySelector('input[name="app"]:checked').value;
   const pay = document.querySelector('input[name="pay"]:checked').value;
-  const code = orderCode();
+  const dText = { self:'I will book my own courier', mfgc:'I will claim the item at MFGC', mm:'Book it for me, Metro Manila (+₱300)', prov:'Book it for me, provincial (+₱400)' }[t.d];
+  const sec = (title, target, html) => `<section><div class="rh"><b>${title}</b><button class="link" type="button" data-edit="${target}">Edit</button></div>${html}</section>`;
+  $('revBody').innerHTML =
+    (editingCode ? `<p class="note">You are updating order <b>${editingCode}</b>.</p>` : '') +
+    sec('Items', 'lines', '<ul>' + cart.map(l => `<li>${l.qty} × ${esc(prodName(l.product))} · ${esc(l.color)} · ${esc(detailOf(l))} <span style="color:var(--muted)">${peso(l.qty * priceOf(l.product))}</span></li>`).join('') + '</ul>') +
+    sec('Contact', 'name', `<p>${esc($('name').value.trim())}</p><p>${esc($('mobile').value.trim())} (${app})</p><p>${esc($('email').value.trim())}</p><p>${esc($('social').value.trim())}</p>`) +
+    sec('Delivery', 'deliveryChoices', `<p>${dText}</p>` + ((t.d === 'mm' || t.d === 'prov') ? `<p>${esc($('address').value.trim())}</p>` : '')) +
+    sec('Payment', 'pay', `<p>${pay}</p>`) +
+    ($('notes').value.trim() ? sec('Notes', 'notes', `<p>${esc($('notes').value.trim())}</p>`) : '') +
+    `<div class="tot"><span>Total to pay</span><span>${peso(t.total)}</span></div>`;
+  $('revBody').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => {
+    closeReview();
+    const id = b.dataset.edit;
+    const el = id === 'pay' ? document.querySelector('input[name="pay"]:checked') : $(id);
+    el.scrollIntoView({ block:'center', behavior:'smooth' });
+    setTimeout(() => (el.focus ? el.focus({ preventScroll:true }) : 0), 300);
+  });
+  $('revConfirm').textContent = editingCode ? 'Confirm and update order' : 'Confirm and place order';
+  const d = $('revDlg');
+  if (d.showModal) d.showModal(); else d.setAttribute('open','');
+}
+function closeReview(){ const d = $('revDlg'); if (d.close) d.close(); else d.removeAttribute('open'); }
+$('revClose').onclick = closeReview;
+$('revBack').onclick = closeReview;
+$('revDlg').addEventListener('click', e => { if (e.target === $('revDlg')) closeReview(); });
+$('revConfirm').onclick = () => { closeReview(); placeOrder(); };
+
+/* ---------- edit after placing ---------- */
+let editingCode = null;
+function setEditing(code){
+  editingCode = code;
+  $('placeBtn').textContent = code ? 'Review and update order' : 'Place order';
+  $('coH').textContent = code ? `Edit order ${code}` : 'Your order';
+}
+$('editOrder').onclick = () => {
+  if (!lastOrder || receiptSent) return;
+  cart = lastOrder.cart.map(l => ({ ...l })); store.set(cart); renderCount();
+  setEditing(lastOrder.code);
+  show('viewCheckout');
+};
+
+function placeOrder(){
+  const t = totals();
+  const name = $('name').value.trim(), mobile = $('mobile').value.replace(/\s|-/g,''), social = $('social').value.trim(), email = $('email').value.trim();
+  const address = $('address').value.trim();
+  const app = document.querySelector('input[name="app"]:checked').value;
+  const pay = document.querySelector('input[name="pay"]:checked').value;
+  const isEdit = !!editingCode;
+  const code = editingCode || orderCode();
   const lines = cart.map(l => `• ${l.qty} × ${prodName(l.product)} · ${l.color} — ${detailOf(l)} (${peso(priceOf(l.product))} each)`).join('\n');
   const msg =
-`LOVE LIKE JESUS PRE-ORDER ${code}
+`LOVE LIKE JESUS PRE-ORDER ${code}${isEdit ? ' (updated)' : ''}
 
 ${lines}
 
@@ -771,23 +849,26 @@ Payment: ${pay}${$('notes').value.trim() ? `\nNotes: ${$('notes').value.trim()}`
 
   const notes = $('notes').value.trim();
   const dName = { self:'Customer books own courier', mfgc:'Claim at MFGC', mm:'Shop books courier, Metro Manila', prov:'Shop books courier, provincial' }[t.d];
-  lastOrder = { code, msg, pay, total: t.total,
-    data: { code, name, mobile, app, email, social,
+  lastOrder = { code, msg, pay, total: t.total, cart: cart.map(l => ({ ...l })),
+    data: { code, edit: isEdit, name, mobile, app, email, social,
       items: cart.map(l => `${l.qty} × ${prodName(l.product)} · ${l.color} · ${detailOf(l)}`).join('\n'),
       lines: cart.map(l => ({ product: prodName(l.product), color: l.color, design: l.design || '', size: l.size || '',
         qty: l.qty, unit: priceOf(l.product), line: l.qty * priceOf(l.product) })),
       itemCount: t.caps, subtotal: t.subtotal, delivery: dName, shippingFee: t.fee,
       address: (t.d === 'self' || t.d === 'mfgc') ? '' : address, total: t.total, payment: pay, notes, message: msg } };
   sendToSheet('lead', lastOrder.data, 'leadMsg');
+  setEditing(null);
   $('rcptFile').value = ''; $('refNo').value = ''; $('ocrMsg').hidden = true; receiptSent = false; ocrRun++; $('sendRcpt').textContent = 'Send payment to the shop'; lastShot = null; $('rcptOut').hidden = true; $('rcptPrev').hidden = true; $('paidMsg').hidden = true; $('sendRcpt').disabled = false; setErr('refNo',''); setErr('rcptFile','');
   renderDone();
   show('viewDone');
   cart = []; store.set(cart); renderCount();
-});
+}
 
 function renderDone(){
   const o = lastOrder;
   $('doneCode').textContent = o.code;
+  $('editOrder').hidden = receiptSent;
+  if (!receiptSent) $('editNote').textContent = 'Change items, contact or delivery details before you send your payment.';
   $('msg').textContent = orderText();
   const acct = o.pay === 'GCash' ? SHOP.gcash : o.pay === 'Maya' ? SHOP.maya : SHOP.bank;
   const rows = [['Amount to pay', peso(o.total)], ['Pay with', o.pay]];
@@ -921,7 +1002,7 @@ function sendPayment(){
   if (!receiptSent) { extra.receipt = shrink(lastShot, 1400); extra.thumb = shrink(lastShot, 600); }
   $('sendRcpt').disabled = true;
   sendToSheet('paid', Object.assign({}, lastOrder.data, extra), 'paidMsg', ok => {
-    if (ok) { receiptSent = true; $('sendRcpt').textContent = 'Update reference number'; }
+    if (ok) { receiptSent = true; $('sendRcpt').textContent = 'Update reference number'; $('editOrder').hidden = true; $('editNote').textContent = 'Your payment is sent. To change this order, message us with your order number.'; }
     else $('sendRcpt').disabled = false;
   });
 }
@@ -947,7 +1028,7 @@ function sendToSheet(type, data, msgId, after){
       el.className = 'savemsg ok';
       el.textContent = type === 'paid'
         ? 'Receipt sent. We check your payment, then confirm your order by message.'
-        : 'Your order is saved with the shop.';
+        : (data.edit ? 'Your updated order is saved with the shop.' : 'Your order is saved with the shop.');
       if (after) after(true);
     })
     .catch(() => {
