@@ -930,7 +930,12 @@ function renderDone(){
 /* order text, with the payment reference number once known */
 function orderText(){
   if (!lastOrder) return '';
-  return lastOrder.msg + (lastOrder.ref ? `\nPayment reference no.: ${lastOrder.ref}` : '');
+  if (!lastOrder.ref) return lastOrder.msg;
+  return lastOrder.msg +
+    `\n\nPayment sent, for your confirmation` +
+    `\nAmount paid: ${peso(lastOrder.total)} via ${lastOrder.pay}` +
+    `\nPayment reference no.: ${lastOrder.ref}` +
+    `\nMy payment receipt image is attached. Please confirm my payment and order ${lastOrder.code}. Thank you.`;
 }
 function refreshCopy(){
   if (!lastOrder) return;
