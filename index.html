@@ -77,6 +77,13 @@ dialog#catDlg{background:var(--panel);color:var(--fg);border:1px solid var(--lin
 dialog#catDlg::backdrop{background:rgba(0,0,0,.7)}
 dialog#revDlg{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:var(--radius);padding:0;width:min(560px,calc(100vw - 24px));max-height:calc(100vh - 24px)}
 dialog#revDlg::backdrop{background:rgba(0,0,0,.7)}
+dialog#nextDlg{background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:var(--radius);padding:0;width:min(560px,calc(100vw - 24px));max-height:calc(100vh - 24px)}
+dialog#nextDlg::backdrop{background:rgba(0,0,0,.7)}
+.nx-steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
+.nx-steps li b{color:var(--fg)}
+#nextMsg{max-height:180px;overflow:auto;margin:0}
+#nextImg{width:100%;max-width:360px;border-radius:8px;border:1px solid var(--line);display:block}
+.nx-btns{display:flex;flex-wrap:wrap;gap:10px}
 .rev{display:flex;flex-direction:column;gap:14px;padding:18px 20px 20px;overflow:auto;max-height:calc(100vh - 140px)}
 .rev section{border-top:1px solid var(--line);padding-top:12px}
 .rev .rh{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:6px}
@@ -408,6 +415,36 @@ footer .wrap{padding-block:24px;display:flex;justify-content:space-between;gap:1
     </section>
   </div>
 </main>
+
+<dialog id="nextDlg" aria-labelledby="nextTitle">
+  <div class="dlg-head"><b id="nextTitle">Payment sent. Now message us your order.</b><button class="btn ghost" type="button" id="nextClose">Close</button></div>
+  <div class="rev">
+    <p class="savemsg" id="nextStatus" style="margin:0"></p>
+    <section>
+      <div class="rh"><b>What to do next</b></div>
+      <ol class="nx-steps">
+        <li><b>Copy your order.</b> Tap Copy order below.</li>
+        <li><b>Save your order receipt.</b> Press and hold the image below, then tap Save. On a computer, right-click it and choose Save image.</li>
+        <li><b>Message us.</b> Tap Message us on Facebook or Instagram. Your order is copied when you tap.</li>
+        <li><b>Paste and send.</b> Paste your order in the chat, attach your saved receipt image, then send.</li>
+        <li><b>Wait for our reply.</b> We check your payment, confirm your order, and message you your dispatch or claiming day.</li>
+      </ol>
+    </section>
+    <section>
+      <div class="rh"><b>Your order</b><button class="link" type="button" id="nextCopy">Copy order</button></div>
+      <pre class="msg" id="nextMsg" tabindex="0"></pre>
+      <span class="added" id="nextCopyMsg" role="status"></span>
+    </section>
+    <section>
+      <div class="rh"><b>Your order receipt</b></div>
+      <img id="nextImg" alt="Order receipt with your order, reference number and payment screenshot">
+    </section>
+  </div>
+  <div class="rev-foot nx-btns">
+    <a class="btn" id="nextFb" target="_blank" rel="noopener">Message us on Facebook</a>
+    <a class="btn ghost" id="nextIg" target="_blank" rel="noopener">Message us on Instagram</a>
+  </div>
+</dialog>
 
 <dialog id="revDlg" aria-labelledby="revTitle">
   <div class="dlg-head"><b id="revTitle">Review your order</b><button class="btn ghost" type="button" id="revClose">Edit details</button></div>
@@ -997,15 +1034,48 @@ function sendPayment(){
   if (!lastShot) { $('rcptFile').focus(); return; }
   if (!refOk) { $('refNo').focus(); return; }
   lastOrder.ref = ref; refreshCopy();
-  if (!SHOP.sheetUrl) { const el = $('paidMsg'); el.hidden = false; el.className = 'savemsg bad'; el.textContent = 'Please send your reference number and receipt image to us by message.'; return; }
+  if (!SHOP.sheetUrl) { const el = $('paidMsg'); el.hidden = false; el.className = 'savemsg bad'; el.textContent = 'Please send your reference number and receipt image to us by message.'; openNext(false); return; }
   const extra = { reference: ref };
   if (!receiptSent) { extra.receipt = shrink(lastShot, 1400); extra.thumb = shrink(lastShot, 600); }
   $('sendRcpt').disabled = true;
   sendToSheet('paid', Object.assign({}, lastOrder.data, extra), 'paidMsg', ok => {
     if (ok) { receiptSent = true; $('sendRcpt').textContent = 'Update reference number'; $('editOrder').hidden = true; $('editNote').textContent = 'Your payment is sent. To change this order, message us with your order number.'; }
     else $('sendRcpt').disabled = false;
+    openNext(ok);
   });
 }
+
+/* after the receipt: show the order text, the receipt image and how to message the shop */
+function copyOrder(onDone){
+  const text = orderText();
+  const done = m => { $('nextCopyMsg').textContent = m; if (onDone) onDone(); };
+  const fallback = () => { const r = document.createRange(); r.selectNodeContents($('nextMsg')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); done('Order selected. Copy it from your keyboard or menu.'); };
+  try { navigator.clipboard.writeText(text).then(() => done('Copied. Paste it in your message to us.'), fallback); } catch(e){ fallback(); }
+}
+function openNext(saved){
+  if (!lastOrder) return;
+  refreshCopy();
+  $('nextMsg').textContent = orderText();
+  $('nextImg').src = $('rcptImg').src || '';
+  $('nextImg').hidden = !$('rcptImg').src;
+  $('nextCopyMsg').textContent = '';
+  const st = $('nextStatus');
+  st.className = 'savemsg ' + (saved === false ? 'bad' : 'ok');
+  st.textContent = saved === false
+    ? 'We could not send your payment online. Message us your order and receipt image so we can confirm it.'
+    : `Order ${lastOrder.code} and your payment are saved with the shop.`;
+  $('nextTitle').textContent = saved === false ? 'Message us your order and receipt' : 'Payment sent. Now message us your order.';
+  $('nextFb').href = SHOP.facebookMessenger || SHOP.facebookPage;
+  $('nextIg').href = `https://ig.me/m/${SHOP.instagram}`;
+  const d = $('nextDlg');
+  if (d.showModal) d.showModal(); else d.setAttribute('open','');
+}
+function closeNext(){ const d = $('nextDlg'); if (d.close) d.close(); else d.removeAttribute('open'); }
+$('nextClose').onclick = closeNext;
+$('nextDlg').addEventListener('click', e => { if (e.target === $('nextDlg')) closeNext(); });
+$('nextCopy').onclick = () => copyOrder();
+$('nextFb').addEventListener('click', () => copyOrder());
+$('nextIg').addEventListener('click', () => copyOrder());
 $('sendRcpt').onclick = sendPayment;
 
 /* save to the shop's Google Sheet */
